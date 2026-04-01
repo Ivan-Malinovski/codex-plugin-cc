@@ -4,10 +4,13 @@
  */
 import https from "node:https";
 import http from "node:http";
-import { URL } from "node:url";
+import { URL, fileURLToPath } from "node:url";
+import path from "node:path";
 
-const PLUGIN_MANIFEST_URL = new URL("../../../../.claude-plugin/plugin.json", import.meta.url);
-const PLUGIN_MANIFEST = JSON.parse(await import("node:fs").then((fs) => fs.promises.readFile(PLUGIN_MANIFEST_URL, "utf8")));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = path.resolve(__dirname, "../../");
+const PLUGIN_MANIFEST_PATH = path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json");
+const PLUGIN_MANIFEST = JSON.parse(await import("node:fs").then((fs) => fs.promises.readFile(PLUGIN_MANIFEST_PATH, "utf8")));
 
 export const LLM_API_KEY_ENV = "LLM_API_KEY";
 export const LLM_API_BASE_URL_ENV = "LLM_API_BASE_URL";
