@@ -1,19 +1,19 @@
 {
-  "name": "openai-codex",
+  "name": "llm-connector",
   "owner": {
-    "name": "OpenAI"
+    "name": "Ivan Malinovski"
   },
   "metadata": {
-    "description": "Codex plugins to use in Claude Code for delegation and code review.",
-    "version": "1.0.2"
+    "description": "Generic LLM connector plugin to use Claude, OpenAI, or other LLMs from Claude Code for code review and task delegation.",
+    "version": "0.0.1"
   },
   "plugins": [
     {
-      "name": "codex",
-      "description": "Use Codex from Claude Code to review code or delegate tasks.",
-      "version": "1.0.2",
+      "name": "llm-connector",
+      "description": "Use any LLM from Claude Code for code review and task delegation.",
+      "version": "0.0.1",
       "author": {
-        "name": "OpenAI"
+        "name": "Ivan Malinovski"
       },
       "source": "./plugins/codex"
     }

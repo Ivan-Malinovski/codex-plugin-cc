@@ -66,8 +66,11 @@ const ROOT_DIR = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const REVIEW_SCHEMA = path.join(ROOT_DIR, "schemas", "review-output.schema.json");
 const DEFAULT_STATUS_WAIT_TIMEOUT_MS = 240000;
 const DEFAULT_STATUS_POLL_INTERVAL_MS = 2000;
-const VALID_REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
-const MODEL_ALIASES = new Map([["spark", "gpt-5.3-codex-spark"]]);
+const MODEL_ALIASES = new Map([
+  ["claude", "claude-sonnet-4-20250514"],
+  ["sonnet", "claude-sonnet-4-20250514"],
+  ["haiku", "claude-haiku-4-20250514"]
+]);
 const STOP_REVIEW_TASK_MARKER = "Run a stop-gate review of the previous Claude turn.";
 
 function printUsage() {
@@ -77,7 +80,7 @@ function printUsage() {
       "  node scripts/codex-companion.mjs setup [--enable-review-gate|--disable-review-gate] [--json]",
       "  node scripts/codex-companion.mjs review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>]",
       "  node scripts/codex-companion.mjs adversarial-review [--wait|--background] [--base <ref>] [--scope <auto|working-tree|branch>] [focus text]",
-      "  node scripts/codex-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model|spark>] [--effort <none|minimal|low|medium|high|xhigh>] [prompt]",
+      "  node scripts/codex-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [prompt]",
       "  node scripts/codex-companion.mjs status [job-id] [--all] [--json]",
       "  node scripts/codex-companion.mjs result [job-id] [--json]",
       "  node scripts/codex-companion.mjs cancel [job-id] [--json]"
@@ -106,22 +109,6 @@ function normalizeRequestedModel(model) {
     return null;
   }
   return MODEL_ALIASES.get(normalized.toLowerCase()) ?? normalized;
-}
-
-function normalizeReasoningEffort(effort) {
-  if (effort == null) {
-    return null;
-  }
-  const normalized = String(effort).trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  if (!VALID_REASONING_EFFORTS.has(normalized)) {
-    throw new Error(
-      `Unsupported reasoning effort "${effort}". Use one of: none, minimal, low, medium, high, xhigh.`
-    );
-  }
-  return normalized;
 }
 
 function normalizeArgv(argv) {
@@ -180,27 +167,25 @@ function buildSetupReport(cwd, actionsTaken = []) {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
   const nodeStatus = binaryAvailable("node", ["--version"], { cwd });
   const npmStatus = binaryAvailable("npm", ["--version"], { cwd });
-  const codexStatus = getCodexAvailability(cwd);
+  const llmStatus = getCodexAvailability(cwd);
   const authStatus = getCodexLoginStatus(cwd);
   const config = getConfig(workspaceRoot);
 
   const nextSteps = [];
-  if (!codexStatus.available) {
-    nextSteps.push("Install Codex with `npm install -g @openai/codex`.");
-  }
-  if (codexStatus.available && !authStatus.loggedIn) {
-    nextSteps.push("Run `!codex login`.");
-    nextSteps.push("If browser login is blocked, retry with `!codex login --device-auth` or `!codex login --with-api-key`.");
+  if (!llmStatus.available) {
+    nextSteps.push("Set LLM_API_KEY environment variable with your API key.");
+    nextSteps.push("Optional: Set LLM_API_BASE_URL to use a different endpoint (defaults to api.anthropic.com).");
+    nextSteps.push("Optional: Set LLM_MODEL to use a specific model.");
   }
   if (!config.stopReviewGate) {
-    nextSteps.push("Optional: run `/codex:setup --enable-review-gate` to require a fresh review before stop.");
+    nextSteps.push("Optional: run `/llm:setup --enable-review-gate` to require a fresh review before stop.");
   }
 
   return {
-    ready: nodeStatus.available && codexStatus.available && authStatus.loggedIn,
+    ready: nodeStatus.available && llmStatus.available && authStatus.loggedIn,
     node: nodeStatus,
     npm: npmStatus,
-    codex: codexStatus,
+    llm: llmStatus,
     auth: authStatus,
     sessionRuntime: getSessionRuntimeStatus(),
     reviewGateEnabled: Boolean(config.stopReviewGate),
@@ -248,10 +233,10 @@ function buildAdversarialReviewPrompt(context, focusText) {
 function ensureCodexReady(cwd) {
   const authStatus = getCodexLoginStatus(cwd);
   if (!authStatus.available) {
-    throw new Error("Codex CLI is not installed or is missing required runtime support. Install it with `npm install -g @openai/codex`, then rerun `/codex:setup`.");
+    throw new Error("LLM is not configured. Set LLM_API_KEY environment variable, then rerun `/llm:setup`.");
   }
   if (!authStatus.loggedIn) {
-    throw new Error("Codex CLI is not authenticated. Run `!codex login` and retry.");
+    throw new Error("LLM API key is not valid. Check your LLM_API_KEY environment variable.");
   }
 }
 
@@ -456,7 +441,6 @@ async function executeTaskRun(request) {
     prompt: request.prompt,
     defaultPrompt: resumeThreadId ? DEFAULT_CONTINUE_PROMPT : "",
     model: request.model,
-    effort: request.effort,
     sandbox: request.write ? "workspace-write" : "read-only",
     onProgress: request.onProgress,
     persistThread: true,
@@ -570,11 +554,10 @@ function buildTaskJob(workspaceRoot, taskMetadata, write) {
   });
 }
 
-function buildTaskRequest({ cwd, model, effort, prompt, write, resumeLast, jobId }) {
+function buildTaskRequest({ cwd, model, prompt, write, resumeLast, jobId }) {
   return {
     cwd,
     model,
-    effort,
     prompt,
     write,
     resumeLast,
@@ -703,7 +686,7 @@ async function handleReview(argv) {
 
 async function handleTask(argv) {
   const { options, positionals } = parseCommandInput(argv, {
-    valueOptions: ["model", "effort", "cwd", "prompt-file"],
+    valueOptions: ["model", "cwd", "prompt-file"],
     booleanOptions: ["json", "write", "resume-last", "resume", "fresh", "background"],
     aliasMap: {
       m: "model"
@@ -713,7 +696,6 @@ async function handleTask(argv) {
   const cwd = resolveCommandCwd(options);
   const workspaceRoot = resolveCommandWorkspace(options);
   const model = normalizeRequestedModel(options.model);
-  const effort = normalizeReasoningEffort(options.effort);
   const prompt = readTaskPrompt(cwd, options, positionals);
 
   const resumeLast = Boolean(options["resume-last"] || options.resume);
@@ -735,7 +717,6 @@ async function handleTask(argv) {
     const request = buildTaskRequest({
       cwd,
       model,
-      effort,
       prompt,
       write,
       resumeLast,
@@ -753,7 +734,6 @@ async function handleTask(argv) {
       executeTaskRun({
         cwd,
         model,
-        effort,
         prompt,
         write,
         resumeLast,
