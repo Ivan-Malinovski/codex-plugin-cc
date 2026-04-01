@@ -44,7 +44,11 @@ export class LLMClient {
     this.apiKey = options.apiKey ?? process.env[LLM_API_KEY_ENV] ?? null;
     this.baseUrl = options.baseUrl ?? process.env[LLM_API_BASE_URL_ENV] ?? "https://api.anthropic.com";
     this.model = options.model ?? process.env[LLM_MODEL_ENV] ?? "claude-sonnet-4-20250514";
-    this.maxTokens = options.maxTokens ?? 8192;
+    this.maxTokens = options.maxTokens ?? 2048;
+  }
+
+  isAnthropicCompatible() {
+    return this.baseUrl.includes("anthropic.com") || this.baseUrl.includes("/anthropic");
   }
 
   getAuthHeaders() {
@@ -61,9 +65,9 @@ export class LLMClient {
     };
   }
 
-  buildEndpoint(path) {
-    const url = new URL(path, this.baseUrl);
-    return url.toString();
+  buildEndpoint(relativePath) {
+    const base = this.baseUrl.endsWith("/") ? this.baseUrl : this.baseUrl + "/";
+    return new URL(relativePath, base).toString();
   }
 
   async makeRequest(endpoint, body) {
@@ -107,7 +111,7 @@ export class LLMClient {
     const model = options.model ?? this.model;
     const maxTokens = options.maxTokens ?? this.maxTokens;
 
-    const isAnthropic = this.baseUrl.includes("anthropic.com");
+    const isAnthropic = this.isAnthropicCompatible();
 
     let body;
     if (isAnthropic) {
@@ -128,14 +132,15 @@ export class LLMClient {
       };
     }
 
-    const endpoint = this.buildEndpoint(isAnthropic ? "/v1/messages" : "/v1/chat/completions");
+    const endpoint = this.buildEndpoint(isAnthropic ? "v1/messages" : "v1/chat/completions");
     const response = await this.makeRequest(endpoint, body);
 
     if (isAnthropic) {
-      const content = response.data.content?.[0]?.text ?? "";
+      const blocks = response.data.content ?? [];
+      const content = blocks.find((c) => c.type === "text")?.text ?? "";
       return {
         content,
-        reasoning: response.data.content?.filter((c) => c.type === "reasoning")?.map((c) => c.text).join("\n") ?? "",
+        reasoning: blocks.filter((c) => c.type === "thinking" || c.type === "reasoning").map((c) => c.thinking ?? c.text ?? "").join("\n"),
         raw: response.data
       };
     } else {
@@ -153,7 +158,7 @@ export class LLMClient {
     const model = options.model ?? this.model;
     const maxTokens = options.maxTokens ?? this.maxTokens;
 
-    const isAnthropic = this.baseUrl.includes("anthropic.com");
+    const isAnthropic = this.isAnthropicCompatible();
 
     let body;
     if (isAnthropic) {
@@ -176,7 +181,7 @@ export class LLMClient {
       };
     }
 
-    const endpoint = this.buildEndpoint(isAnthropic ? "/v1/messages" : "/v1/chat/completions");
+    const endpoint = this.buildEndpoint(isAnthropic ? "v1/messages" : "v1/chat/completions");
     const url = new URL(endpoint);
 
     const isHttps = url.protocol === "https:";
