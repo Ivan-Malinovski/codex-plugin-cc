@@ -1,4 +1,4 @@
-# LLM Connector for Claude Code
+# Relay CC Plugin — LLM Connector for Claude Code
 
 Use any LLM from inside Claude Code for code reviews or to delegate tasks.
 

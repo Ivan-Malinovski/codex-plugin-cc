@@ -1,16 +1,16 @@
 {
-  "name": "llm-connector",
+  "name": "relay-cc",
   "owner": {
     "name": "Ivan Malinovski"
   },
   "metadata": {
-    "description": "Generic LLM connector plugin to use Claude, OpenAI, or other LLMs from Claude Code for code review and task delegation.",
+    "description": "Relay CC Plugin — LLM connector to use any external LLM from Claude Code for code review and task delegation.",
     "version": "0.0.1"
   },
   "plugins": [
     {
-      "name": "llm-connector",
-      "description": "Use any LLM from Claude Code for code review and task delegation.",
+      "name": "relay-cc",
+      "description": "Relay tasks and reviews to any LLM from Claude Code.",
       "version": "0.0.1",
       "author": {
         "name": "Ivan Malinovski"

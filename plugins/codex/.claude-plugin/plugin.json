@@ -1,7 +1,7 @@
 {
-  "name": "llm-connector",
+  "name": "relay-cc",
   "version": "0.0.1",
-  "description": "Use any LLM from Claude Code for code review and task delegation.",
+  "description": "Relay CC Plugin — LLM connector for Claude Code.",
   "author": {
     "name": "Ivan Malinovski"
   }
